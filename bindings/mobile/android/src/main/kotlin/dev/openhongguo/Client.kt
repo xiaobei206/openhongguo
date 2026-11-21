@@ -47,7 +47,7 @@ data class ClientOptions(
     val retryAttempts: Int = 3,
     /** 设备被拒或播放返回空结果时，一次调用最多换几台新的匿名设备，默认 2；0 表示关闭。 */
     val deviceResets: Int = 2,
-    /** 新注册设备自称的机型；为空的字段取默认值（小米 14）。 */
+    /** 新注册设备自称的机型；为空的字段取默认值（小米 15）。 */
     val device: Device? = null,
     /** 接收诊断日志，在 SDK 的线程里调用；日志里的 URL 已经脱敏。 */
     val logger: ((String) -> Unit)? = null,
