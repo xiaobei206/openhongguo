@@ -27,13 +27,13 @@ type Device struct {
 	Channel string `json:"channel"`
 }
 
-// DefaultDevice 是一台 Xiaomi 14，系统为 Android 14，装小米应用商店版。
+// DefaultDevice 是一台 Xiaomi 15，系统为 Android 15，装小米应用商店版。
 var DefaultDevice = Device{
 	Brand:      "Xiaomi",
-	Model:      "23127PN0CC",
-	OSVersion:  "14",
-	OSAPI:      34,
-	Build:      "UKQ1.230804.001",
+	Model:      "24129PN74C",
+	OSVersion:  "15",
+	OSAPI:      35,
+	Build:      "AQ3A.240812.002",
 	Resolution: "1200*2670",
 	DPI:        460,
 	Channel:    "xiaomi_8662_64",
