@@ -30,6 +30,8 @@ type devicePerRequest struct {
 
 func (s *devicePerRequest) handler(t *testing.T) http.Handler {
 	reg := fixture(t, "register-response.json")
+	// These tests isolate device-reset behavior from the separate EGDI heartbeat.
+	reg = []byte(strings.TrimSuffix(strings.TrimSpace(string(reg)), "}") + `, "klink_egdi":"fixture-egdi"}`)
 	clear := fixture(t, "clear-playback.json")
 	search := fixture(t, "search-response.json")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
