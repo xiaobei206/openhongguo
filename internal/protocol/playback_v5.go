@@ -14,7 +14,9 @@ const (
 	// signed request body, not a path segment.
 	PathPlaybackV5      = "/novel/player/multi_video_model/v1/"
 	PathVideoTab        = "/reading/bookapi/video_tab/multi_video_model/v1/"
-	VideoTabUserAgent   = "com.phoenix.read/73932 (Linux; U; Android 16; zh_CN; 25053RT47C; Build/BP2A.250605.031.A3; Cronet/TTNetVersion:04657795 2026-01-23 QuicVersion:c67e9834 2025-09-08)"
+	VideoTabUserAgent   = "com.phoenix.read/74532 (Linux; U; Android 12; zh_CN_#Hans; PGT-AN10; Build/V417IR;tt-ok/3.12.13.20)"
+	VideoTabVersionCode = 74532
+	VideoTabVersionName = "7.4.5.32"
 	PlaybackVersionCode = 74332
 	PlaybackVersionName = "7.4.3.32"
 )
@@ -75,17 +77,18 @@ func PlaybackV5Pairs(id SearchIdentity) [][2]string {
 // player endpoint answers with an empty model. Device fields come from the
 // same persisted anonymous profile as the primary playback request.
 func VideoTabPairs(episodeID string, id SearchIdentity) [][2]string {
-	d := id.Device.OrDefault()
+	// The 2026-11-23 video_tab GET uses a dedicated 7.4.5.32 mobile profile,
+	// independent of the persisted Xiaomi profile used by catalog and POST reads.
 	return [][2]string{
 		{"aid", AID},
 		{"app_name", AppName},
-		{"version_code", strconv.Itoa(PlaybackVersionCode)},
-		{"version_name", PlaybackVersionName},
-		{"channel", d.Channel},
+		{"version_code", strconv.Itoa(VideoTabVersionCode)},
+		{"version_name", VideoTabVersionName},
+		{"channel", "vivo_8662_64"},
 		{"device_platform", "android"},
-		{"device_type", d.Model},
-		{"os_version", d.OSVersion},
-		{"update_version_code", strconv.Itoa(PlaybackVersionCode)},
+		{"device_type", "PGT-AN10"},
+		{"os_version", "12"},
+		{"update_version_code", strconv.Itoa(VideoTabVersionCode)},
 		{"iid", id.InstallID},
 		{"cdid", id.CDID},
 		{"device_id", id.DeviceID},

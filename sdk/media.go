@@ -113,19 +113,39 @@ func playbackRouteUnavailable(err error) bool {
 // resolveVideoTab asks the bodyless video_tab route for the episode model.
 // It is a fallback for V5 player POST responses that contain no model.
 func (c *Client) resolveVideoTab(ctx context.Context, p *DeviceProfile, episodeID string) ([]byte, error) {
-	query, signed, err := c.playbackSigner.Sign(protocol.VideoTabPairs(episodeID, c.identity(p)), c.clock().UnixMilli(), nil, nil)
-	if err != nil {
-		return nil, err
+	// []byte{} means MD5(empty) to PlaybackV5Signer. nil means a 16-byte zero
+	// digest and is not equivalent. The actual GET remains bodyless.
+	origins := []string{c.apiOrigin}
+	if c.apiOrigin == defaultAPIOrigin {
+		origins = []string{"https://api5-normal-sinfonlineb.fqnovel.com", c.apiOrigin}
 	}
-	headers := map[string]string{
-		"User-Agent": protocol.VideoTabUserAgent,
-		"Accept":     "application/json",
+	var lastErr error
+	for index, origin := range origins {
+		if err := ctx.Err(); err != nil { return nil, err }
+		query, signed, err := c.playbackSigner.Sign(
+			protocol.VideoTabPairs(episodeID, c.identity(p)), c.clock().UnixMilli(), []byte{}, nil,
+		)
+		if err != nil { return nil, err }
+		// Empty bytes are signing input only; these are POST-only headers.
+		delete(signed, "x-ss-stub")
+		delete(signed, "Content-Type")
+		delete(signed, "Content-Encoding")
+		headers := map[string]string{
+			"User-Agent": protocol.VideoTabUserAgent,
+			"Accept": "application/json; charset=utf-8",
+		}
+		for name, value := range signed { headers[name] = value }
+		if c.logger != nil {
+			c.logger.Printf("playback fallback video_tab attempt=%d/%d host=%s signer=v5 profile=7.4.5.32 body=none signing_digest=md5(empty)",
+				index+1, len(origins), origin)
+		}
+		raw, _, err := c.doRaw(ctx, "GET", origin+protocol.PathVideoTab+"?"+query, headers, nil)
+		if err == nil && len(raw) > 0 { return raw, nil }
+		lastErr = err
+		if err != nil && !errors.Is(err, ErrAnonymousLimited) && !playbackRouteUnavailable(err) { return nil, err }
 	}
-	for name, value := range signed {
-		headers[name] = value
-	}
-	raw, _, err := c.doRaw(ctx, "GET", c.apiOrigin+protocol.PathVideoTab+"?"+query, headers, nil)
-	return raw, err
+	if lastErr == nil { lastErr = ErrAnonymousLimited }
+	return nil, lastErr
 }
 
 // ContentKey 从播放模型算出加密分集的内容密钥。

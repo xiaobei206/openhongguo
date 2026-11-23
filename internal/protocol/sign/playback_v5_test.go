@@ -1,6 +1,8 @@
 package sign
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"strings"
 	"testing"
 )
@@ -41,5 +43,20 @@ func TestPlaybackV5SignOmitsStubForBodylessRequest(t *testing.T) {
 	}
 	if _, ok := headers["Content-Type"]; ok {
 		t.Fatalf("bodyless request carried Content-Type: %v", headers)
+	}
+}
+
+func TestPlaybackV5EmptyBodyUsesMD5OfEmptyBytes(t *testing.T) {
+	s := NewPlaybackV5Signer(1_794_000_000_000)
+	_, headers, err := s.Sign([][2]string{{"video_id", "123"}}, 1_794_000_000_123, []byte{}, nil)
+	if err != nil { t.Fatal(err) }
+	sum := md5.Sum([]byte{})
+	if got, want := headers["x-ss-stub"], strings.ToUpper(hex.EncodeToString(sum[:])); got != want {
+		t.Fatalf("empty-body x-ss-stub = %q, want MD5(empty) %q", got, want)
+	}
+	_, noBodyHeaders, err := s.Sign([][2]string{{"video_id", "123"}}, 1_794_000_000_123, nil, nil)
+	if err != nil { t.Fatal(err) }
+	if _, ok := noBodyHeaders["x-ss-stub"]; ok {
+		t.Fatalf("nil body unexpectedly has x-ss-stub: %#v", noBodyHeaders)
 	}
 }

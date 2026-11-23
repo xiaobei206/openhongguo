@@ -5,7 +5,9 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -180,39 +182,120 @@ func sleepContext(ctx context.Context, wait time.Duration) error {
 }
 
 func (c *Client) doOnce(ctx context.Context, method, rawURL string, headers map[string]string, body []byte, attempt int) ([]byte, map[string]string, error) {
-	if err := refuseCredentialHeaders(headers); err != nil {
-		return nil, nil, err
-	}
-	if headers == nil {
-		headers = map[string]string{}
-	}
-	if _, ok := headers["Accept"]; !ok {
-		headers["Accept"] = "application/json"
-	}
+	if err := refuseCredentialHeaders(headers); err != nil { return nil, nil, err }
+	if headers == nil { headers = map[string]string{} }
+	if _, ok := headers["Accept"]; !ok { headers["Accept"] = "application/json" }
 	req := &Request{Method: method, URL: rawURL, Headers: headers, Body: body}
-	if err := c.authProvider.Apply(ctx, req); err != nil {
-		return nil, nil, err
-	}
-	if err := refuseCredentialHeaders(req.Headers); err != nil {
-		return nil, nil, err
+	if err := c.authProvider.Apply(ctx, req); err != nil { return nil, nil, err }
+	if err := refuseCredentialHeaders(req.Headers); err != nil { return nil, nil, err }
+
+	started := time.Now()
+	playback := isPlaybackRequest(req.URL)
+	if c.logger != nil && playback {
+		c.logger.Printf("playback request method=%s url=%s body_present=%t body_bytes=%d body_sha256_8=%s content_type=%s content_encoding=%s signer=%s attempt=%d profile={%s}",
+			method, protocol.RedactedURL(req.URL), len(req.Body) > 0, len(req.Body), bodyDigest(req.Body),
+			headerValue(req.Headers, "Content-Type"), headerValue(req.Headers, "Content-Encoding"),
+			signatureFamily(req.Headers), attempt+1, safeRequestProfile(req.URL))
 	}
 	resp, err := c.transport.Do(ctx, req)
 	if err != nil {
-		// 签名服务（Options.SignerURL）的错误原样返回，方便看出签名服务的问题；
-		// 其余错误可能带着完整 URL，只返回脱敏后的地址。
-		if errors.Is(err, ErrSignerUnavailable) {
-			return nil, nil, err
+		if c.logger != nil && playback {
+			c.logger.Printf("playback transport_error method=%s url=%s duration_ms=%d error_type=%T",
+				method, protocol.RedactedURL(req.URL), time.Since(started).Milliseconds(), err)
 		}
+		if errors.Is(err, ErrSignerUnavailable) { return nil, nil, err }
 		return nil, nil, fmt.Errorf("%w: %s", ErrTransport, protocol.RedactedURL(req.URL))
 	}
 	if c.logger != nil {
 		c.logger.Printf("HTTP %s %s -> %d", method, protocol.RedactedURL(req.URL), statusOf(resp))
 	}
-	raw, err := readAnonymous(resp)
-	if err != nil {
-		return nil, nil, err
+	if resp == nil { return nil, nil, fmt.Errorf("%w: nil response", ErrTransport) }
+
+	var raw []byte
+	var readErr error
+	decodedBytes := -1
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		var decoded []byte
+		decoded, readErr = decodeBody(resp)
+		if readErr == nil {
+			decodedBytes = len(decoded)
+			raw, readErr = readAnonymousBody(resp, decoded)
+		}
+	} else {
+		readErr = readAnonymous(resp)
 	}
+	if c.logger != nil && playback {
+		c.logger.Printf("playback response method=%s url=%s status=%d transferred_bytes=%d decoded_bytes=%s content_type=%s content_encoding=%s duration_ms=%d stage=%s server_trace=%s",
+			method, protocol.RedactedURL(req.URL), resp.StatusCode, len(resp.Body), byteCount(decodedBytes),
+			headerValue(resp.Headers, "Content-Type"), headerValue(resp.Headers, "Content-Encoding"),
+			time.Since(started).Milliseconds(), playbackResultStage(readErr), safeServerTrace(resp.Headers))
+	}
+	if readErr != nil { return nil, nil, readErr }
 	return raw, resp.Cookies, nil
+}
+
+func isPlaybackRequest(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil { return false }
+	return strings.Contains(u.Path, "/player/") || strings.Contains(u.Path, "/video_tab/")
+}
+
+func bodyDigest(body []byte) string {
+	if len(body) == 0 { return "none" }
+	sum := sha256.Sum256(body)
+	return hex.EncodeToString(sum[:6])
+}
+
+func headerValue(headers map[string]string, name string) string {
+	for key, value := range headers { if strings.EqualFold(key, name) { return strings.TrimSpace(value) } }
+	return ""
+}
+
+func signatureFamily(headers map[string]string) string {
+	switch {
+	case headerValue(headers, "x-medusa") != "": return "v5(khronos,helios,medusa)"
+	case headerValue(headers, "x-argus") != "": return "argus"
+	case headerValue(headers, "x-gorgon") != "": return "gorgon"
+	default: return "none_or_other"
+	}
+}
+
+func safeRequestProfile(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil { return "unavailable" }
+	q := u.Query()
+	keys := []string{"version_code", "version_name", "channel", "device_platform", "device_type", "os_version", "device_level", "video_id_type"}
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys { if value := q.Get(key); value != "" { parts = append(parts, key+"="+value) } }
+	return strings.Join(parts, ",")
+}
+
+func safeServerTrace(headers map[string]string) string {
+	keys := []string{"x-tt-logid", "x-tt-trace-id", "x-request-id", "traceparent", "date"}
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys { if value := headerValue(headers, key); value != "" { parts = append(parts, key+"="+value) } }
+	return strings.Join(parts, ",")
+}
+
+func byteCount(n int) string {
+	if n < 0 { return "unavailable" }
+	return strconv.Itoa(n)
+}
+
+func playbackResultStage(err error) string {
+	switch {
+	case err == nil: return "decoded_nonempty_response"
+	case errors.Is(err, ErrAnonymousLimited): return "http_success_empty_body"
+	case errors.Is(err, ErrAuthenticationRequired): return "authentication_rejected"
+	case errors.Is(err, ErrRateLimited): return "rate_limited"
+	case errors.Is(err, ErrTransport): return "transport_or_decode_error"
+	default:
+		var api *APIError
+		if errors.As(err, &api) { return "http_error" }
+		var code *CodeError
+		if errors.As(err, &code) { return "server_business_error" }
+		return "parse_or_protocol_error"
+	}
 }
 
 func statusOf(resp *Response) int {
@@ -223,37 +306,34 @@ func statusOf(resp *Response) int {
 }
 
 func readAnonymous(resp *Response) ([]byte, error) {
-	if resp == nil {
-		return nil, fmt.Errorf("%w: nil response", ErrTransport)
-	}
+	if resp == nil { return nil, fmt.Errorf("%w: nil response", ErrTransport) }
 	switch resp.StatusCode {
-	case 401, 403:
-		return nil, ErrAuthenticationRequired
-	case 429:
-		return nil, ErrRateLimited
+	case 401, 403: return nil, ErrAuthenticationRequired
+	case 429: return nil, ErrRateLimited
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, &APIError{HTTPStatus: resp.StatusCode, Message: "HTTP request failed"}
 	}
 	body, err := decodeBody(resp)
-	if err != nil {
-		return nil, err
+	if err != nil { return nil, err }
+	return readAnonymousBody(resp, body)
+}
+
+// readAnonymousBody classifies a response that has already been decompressed.
+func readAnonymousBody(resp *Response, body []byte) ([]byte, error) {
+	if resp == nil { return nil, fmt.Errorf("%w: nil response", ErrTransport) }
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, &APIError{HTTPStatus: resp.StatusCode, Message: "HTTP request failed"}
 	}
-	if len(bytes.TrimSpace(body)) == 0 {
-		return nil, ErrAnonymousLimited
-	}
+	if len(bytes.TrimSpace(body)) == 0 { return nil, ErrAnonymousLimited }
 	if code, message, ok := protocol.BusinessCode(body); ok && code != "0" {
 		n, convErr := strconv.Atoi(code)
 		if convErr != nil {
-			if protocol.AuthCode(code, message) {
-				return nil, ErrAuthenticationRequired
-			}
+			if protocol.AuthCode(code, message) { return nil, ErrAuthenticationRequired }
 			return nil, &CodeError{Message: message, Kind: protocol.Classify(0, message)}
 		}
 		kind := protocol.Classify(n, message)
-		return nil, &CodeError{
-			Code: n, Name: protocol.CodeName(n), Message: message, Kind: kind,
-		}
+		return nil, &CodeError{Code: n, Name: protocol.CodeName(n), Message: message, Kind: kind}
 	}
 	if status := protocol.BaseStatus(body); protocol.DeviceRejected(status) {
 		return nil, &CodeError{Code: status, Name: "DEVICE_REJECTED", Kind: protocol.KindDeviceRejected}
