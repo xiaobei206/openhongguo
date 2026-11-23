@@ -58,7 +58,7 @@ func (s *PlaybackV5Signer) Sign(pairs [][2]string, nowMillis int64, body []byte,
 		}
 		headers := map[string]string{
 			"x-khronos":    strconv.FormatUint(uint64(ts), 10),
-			"x-gorgon":     xGorgon(query, body, len(body) > 0, ts, ent.GorgonRandom),
+			"x-gorgon":     xGorgon(query, body, body != nil, ts, ent.GorgonRandom),
 			"x-argus":      base64.StdEncoding.EncodeToString(le32(ts)),
 			"x-ladon":      base64.StdEncoding.EncodeToString(be32(ts)),
 			"x-helios":     playbackV5Helios(ts, ent.HeliosRandom),
