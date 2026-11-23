@@ -88,6 +88,9 @@ func (f *fixtureTransport) Do(_ context.Context, req *sdk.Request) (*sdk.Respons
 	case u.Path == protocol.PathRankCells && u.Query().Get("cell_id") == protocol.ShortRankCell:
 		return f.file("short-rank.json"), nil
 	}
+	if u.Path == "/service/2/app_alert_check/" {
+		return &sdk.Response{StatusCode: 200}, nil
+	}
 	if strings.HasPrefix(u.Path, "/novel/commentapi/user/profile/") {
 		// The page asks for its tabs (no tab_type) before the works.
 		if !bytes.Contains(req.Body, []byte(`"tab_type"`)) {
