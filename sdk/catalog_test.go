@@ -1533,3 +1533,48 @@ func containsPath(paths []string, want string) bool {
 	}
 	return false
 }
+
+
+func TestPlaybackBackfillsMissingEGDIWithSameRegisteredIdentity(t *testing.T) {
+	regWithoutEGDI := fixture(t, "register-response.json")
+	regWithEGDI := []byte(strings.TrimSuffix(strings.TrimSpace(string(regWithoutEGDI)), "}") + `, "klink_egdi":"fixture-egdi"}`)
+	var registerCalls, activationCalls int
+	var playbackQuery url.Values
+	client, _ := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case protocol.PathRegister:
+			registerCalls++
+			w.Header().Add("Set-Cookie", "ttreq=fixture-ticket; Path=/")
+			if registerCalls == 1 {
+				_, _ = w.Write(regWithoutEGDI)
+				return
+			}
+			_, _ = io.ReadAll(r.Body)
+			_, _ = w.Write(regWithEGDI)
+		case "/service/2/app_alert_check/":
+			activationCalls++
+			w.WriteHeader(http.StatusOK)
+		case protocol.PathPlaybackV5:
+			playbackQuery, _ = url.ParseQuery(r.URL.RawQuery)
+			_, _ = w.Write(fixture(t, "drm-playback.json"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	playback, err := client.ResolvePlayback(context.Background(), "7100000000000201", sdk.PlaybackOptions{})
+	if !errors.Is(err, sdk.ErrDRMProtected) || playback == nil || !playback.Protected {
+		t.Fatalf("playback=%+v err=%v", playback, err)
+	}
+	if registerCalls != 2 {
+		t.Fatalf("device_register calls = %d, want initial registration + same-identity heartbeat", registerCalls)
+	}
+	if activationCalls != 1 {
+		t.Fatalf("app_alert_check calls = %d, want 1", activationCalls)
+	}
+	if playbackQuery.Get("device_id") != "7100000000000001" ||
+		playbackQuery.Get("iid") != "7100000000000002" ||
+		playbackQuery.Get("klink_egdi") != "fixture-egdi" {
+		t.Fatalf("playback query did not use backfilled identity/EGDI: %v", playbackQuery)
+	}
+}
