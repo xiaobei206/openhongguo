@@ -25,6 +25,7 @@ func TestVideoTabPairsUseIdentityDevice(t *testing.T) {
 		"os_version":   "12",
 		"version_code": "74532",
 		"version_name": "7.4.5.32",
+		"manifest_version_code": "74532",
 		"device_brand": "HONOR",
 		"rom_version": "V417IR+release-keys",
 		"pv_player": "74532",
