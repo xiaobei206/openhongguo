@@ -25,7 +25,23 @@ type RegisterResult struct {
 // BuildRegisterBody gzip-compresses the anonymous ss_app_log envelope and applies
 // the portable tt-data wrapper. It does not attach an account token.
 func BuildRegisterBody(profile RegisterIdentity, generatedAt time.Time) ([]byte, error) {
-	plain, err := BuildBootstrapPlaintext(registerHeader(profile, generatedAt), generatedAt)
+	return buildDeviceRegisterBody(profile, "0", "0", generatedAt)
+}
+
+// BuildHeartbeatBody creates a device_register heartbeat with the existing device_id
+// and install_id. It never generates a replacement identity pair.
+func BuildHeartbeatBody(profile RegisterIdentity, deviceID, installID string, generatedAt time.Time) ([]byte, error) {
+	if deviceID == "" || installID == "" || deviceID == "0" || installID == "0" {
+		return nil, errNoGuest
+	}
+	return buildDeviceRegisterBody(profile, deviceID, installID, generatedAt)
+}
+
+func buildDeviceRegisterBody(profile RegisterIdentity, deviceID, installID string, generatedAt time.Time) ([]byte, error) {
+	header := registerHeader(profile, generatedAt)
+	header["device_id"] = deviceID
+	header["install_id"] = installID
+	plain, err := BuildBootstrapPlaintext(header, generatedAt)
 	if err != nil {
 		return nil, err
 	}

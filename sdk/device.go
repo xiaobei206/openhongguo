@@ -27,6 +27,9 @@ type DeviceProfile struct {
 	DeviceToken string `json:"device_token,omitempty"`
 	// KlinkEGDI is a server-issued playback attestation value.
 	KlinkEGDI string `json:"klink_egdi,omitempty"`
+	// DeviceRegister heartbeat timing; milliseconds since Unix epoch.
+	LastDeviceHeartbeatAt        int64 `json:"last_device_heartbeat_at,omitempty"`
+	LastDeviceHeartbeatAttemptAt int64 `json:"last_device_heartbeat_attempt_at,omitempty"`
 	// TTReq、StoreRegion 和 StoreRegionSrc 是服务端设置的 cookie，
 	// 后续请求会原样带上。
 	TTReq          string `json:"ttreq,omitempty"`

@@ -452,6 +452,7 @@ func (c *Client) loadOrRegister(ctx context.Context, needTicket bool) (*DevicePr
 	p.InstallID = registered.InstallID
 	if registered.KlinkEGDI != "" {
 		p.KlinkEGDI = registered.KlinkEGDI
+		p.LastDeviceHeartbeatAt = c.clock().UnixMilli()
 	}
 	p.DeviceToken = ""
 	applyGuestCookies(p, cookies)
@@ -526,6 +527,89 @@ func (c *Client) identity(p *DeviceProfile) protocol.SearchIdentity {
 	}
 }
 
+// ensureDeviceHeartbeat refreshes server-issued EGDI for old profiles and keeps
+// the device_id/install_id pair stable. A failed/mismatched heartbeat never rotates identity.
+func (c *Client) ensureDeviceHeartbeat(ctx context.Context, p *DeviceProfile) {
+	if c == nil || p == nil || !guestReady(p) || c.transport == nil {
+		return
+	}
+	now := c.clock()
+	nowMs := now.UnixMilli()
+	const heartbeatInterval = int64((6 * time.Hour) / time.Millisecond)
+	const retryInterval = int64((30 * time.Minute) / time.Millisecond)
+	due := p.KlinkEGDI == "" || p.LastDeviceHeartbeatAt <= 0 ||
+		nowMs-p.LastDeviceHeartbeatAt >= heartbeatInterval
+	if !due {
+		return
+	}
+	if p.LastDeviceHeartbeatAttemptAt > 0 &&
+		(nowMs < p.LastDeviceHeartbeatAttemptAt || nowMs-p.LastDeviceHeartbeatAttemptAt < retryInterval) {
+		return
+	}
+	p.LastDeviceHeartbeatAttemptAt = nowMs
+	if err := c.profileStore.Save(ctx, p); err != nil && c.logger != nil {
+		c.logger.Printf("playback device heartbeat attempt timestamp save failed: error_type=%T", err)
+	}
+	identity := protocol.RegisterIdentity{
+		CDID: p.CDID, OpenUDID: p.OpenUDID, ClientUDID: p.ClientUDID,
+		OAID: p.OAID, ReqID: p.ReqID, Device: c.deviceOf(p),
+	}
+	body, err := protocol.BuildHeartbeatBody(identity, p.DeviceID, p.InstallID, now)
+	if err != nil {
+		if c.logger != nil {
+			c.logger.Printf("playback device heartbeat body failed: error_type=%T", err)
+		}
+		return
+	}
+	q := url.Values{"req_id": {p.ReqID}, "tt_data": {"a"}}
+	headers := map[string]string{
+		"User-Agent":                protocol.UserAgent(c.deviceOf(p)),
+		"Content-Type":              "application/octet-stream;tt-data=a",
+		"log-encode-type":           "gzip",
+		"sdk-version":               "2",
+		"passport-sdk-version":      "5051452",
+		"x-vc-bdturing-sdk-version": "4.0.3.cn",
+		"x-ss-dp":                   protocol.AID,
+		"X-SS-STUB":                 protocol.ContentMD5(body),
+	}
+	heartbeatCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	raw, cookies, err := c.do(heartbeatCtx, "POST", c.registerOrigin, protocol.PathRegister, q, headers, body)
+	if err != nil {
+		if c.logger != nil {
+			c.logger.Printf("playback device heartbeat failed: error_type=%T", err)
+		}
+		return
+	}
+	registered, err := protocol.ParseRegister(raw)
+	if err != nil {
+		if c.logger != nil {
+			c.logger.Printf("playback device heartbeat response invalid: error_type=%T", err)
+		}
+		return
+	}
+	if registered.DeviceID != p.DeviceID || registered.InstallID != p.InstallID {
+		if c.logger != nil {
+			c.logger.Printf("playback device heartbeat identity mismatch; original profile retained")
+		}
+		return
+	}
+	if registered.KlinkEGDI != "" {
+		p.KlinkEGDI = registered.KlinkEGDI
+	}
+	applyGuestCookies(p, cookies)
+	p.LastDeviceHeartbeatAt = nowMs
+	if err := c.profileStore.Save(ctx, p); err != nil {
+		if c.logger != nil {
+			c.logger.Printf("playback device heartbeat profile save failed: error_type=%T", err)
+		}
+		return
+	}
+	if c.logger != nil {
+		c.logger.Printf("playback device heartbeat accepted: egdi_present=%t", p.KlinkEGDI != "")
+	}
+}
+
 // ensurePlaybackDeviceActivated best-effort activates a persisted anonymous device
 // before playback. Existing profiles are handled too; no identity is cleared or rotated.
 func (c *Client) ensurePlaybackDeviceActivated(ctx context.Context, p *DeviceProfile) {
@@ -534,6 +618,7 @@ func (c *Client) ensurePlaybackDeviceActivated(ctx context.Context, p *DevicePro
 	}
 	c.activationMu.Lock()
 	defer c.activationMu.Unlock()
+	c.ensureDeviceHeartbeat(ctx, p)
 	if c.activatedDeviceID == p.DeviceID {
 		return
 	}
