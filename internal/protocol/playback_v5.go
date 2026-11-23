@@ -123,10 +123,10 @@ func VideoTabPairs(episodeID string, id SearchIdentity) [][2]string {
 		[2]string{"device_level", "1"},
 		[2]string{"need_all_video_definition", "1"},
 		[2]string{"need_mp4_align", "0"},
-		{"use_os_player", "0"},
-		{"video_platform", "1024"},
-		{"source", "0"},
-		{"from_video_id", ""},
+		[2]string{"use_os_player", "0"},
+		[2]string{"video_platform", "1024"},
+		[2]string{"source", "0"},
+		[2]string{"from_video_id", ""},
 	)
 }
 
