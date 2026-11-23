@@ -27,7 +27,7 @@ core_android() {
 	rm -rf "$out/android"
 	mkdir -p "$out/android"
 	(cd "$core" && gomobile bind -target android -androidapi 21 -javapkg dev.openhongguo \
-		-trimpath -ldflags="-s -w" -o "$out/android/core.aar" .)
+		-trimpath -ldflags="-s -w -linkmode=external -extldflags=-Wl,-z,max-page-size=16384,-z,common-page-size=16384" -o "$out/android/core.aar" .)
 	(cd "$out/android" && unzip -q core.aar classes.jar 'jni/*' && mv classes.jar core.jar)
 }
 
