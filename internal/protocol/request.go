@@ -152,6 +152,8 @@ type SearchIdentity struct {
 	InstallID string
 	CDID      string
 	OpenUDID  string
+	// KlinkEGDI is an optional server-issued playback attestation value.
+	KlinkEGDI string
 	// Device is the phone the profile registered as; zero fields fall back
 	// to model.DefaultDevice.
 	Device model.Device

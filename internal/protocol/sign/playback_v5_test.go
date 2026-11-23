@@ -60,3 +60,25 @@ func TestPlaybackV5EmptyBodyUsesMD5OfEmptyBytes(t *testing.T) {
 		t.Fatalf("nil body unexpectedly has x-ss-stub: %#v", noBodyHeaders)
 	}
 }
+
+func TestPlaybackV5EmitsCompleteMobileHeaderSuite(t *testing.T) {
+	s := NewPlaybackV5Signer(1_794_000_000_000)
+	body := []byte("gzip bytes")
+	_, headers, err := s.Sign([][2]string{
+		{"device_id", "7100000000000001"},
+		{"version_name", "7.4.3.32"},
+		{"device_type", "24129PN74C"},
+		{"device_brand", "Xiaomi"},
+		{"os_version", "15"},
+		{"channel", "xiaomi_8662_64"},
+	}, 1_794_000_000_123, body, nil)
+	if err != nil { t.Fatal(err) }
+	for _, key := range []string{"x-khronos","x-gorgon","x-argus","x-ladon","x-helios","x-medusa"} {
+		if headers[key] == "" { t.Errorf("missing V5 security header %q", key) }
+	}
+	if headers["x-xs-from-web"] != "0" { t.Fatalf("x-xs-from-web = %q", headers["x-xs-from-web"]) }
+}
+func TestPlaybackV5SecDeviceTokenIs25CharsAndPrefixed(t *testing.T) {
+	token := playbackV5SecDeviceToken("abcdefghijklmnopqrstuvwx")
+	if len(token) != 25 || token[0] != 'A' { t.Fatalf("sec_device_token = %q (len=%d)", token, len(token)) }
+}

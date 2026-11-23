@@ -40,7 +40,7 @@ func PlaybackV5Pairs(id SearchIdentity) [][2]string {
 		kind, pad = "pad", "1"
 	}
 	version := strconv.Itoa(PlaybackVersionCode)
-	return [][2]string{
+	pairs := [][2]string{
 		{"device_platform", DevicePlatform},
 		{"os", "android"},
 		{"ssmix", "a"},
@@ -71,37 +71,63 @@ func PlaybackV5Pairs(id SearchIdentity) [][2]string {
 		{"iid", id.InstallID},
 		{"device_id", id.DeviceID},
 	}
+	if id.KlinkEGDI != "" {
+		pairs = append(pairs, [2]string{"klink_egdi", id.KlinkEGDI})
+	}
+	return pairs
 }
 
 // VideoTabPairs is the ordered, bodyless video_tab query used when the V5
 // player endpoint answers with an empty model. Device fields come from the
 // same persisted anonymous profile as the primary playback request.
 func VideoTabPairs(episodeID string, id SearchIdentity) [][2]string {
-	// The 2026-11-23 video_tab GET uses a dedicated 7.4.5.32 mobile profile,
-	// independent of the persisted Xiaomi profile used by catalog and POST reads.
-	return [][2]string{
+	// Keep the dedicated 7.4.5.32 video_tab profile, but include the full
+	// query fields used by the updated mobile V5 client. Anonymous IDs and
+	// optional EGDI still come from the same persisted registration.
+	pairs := [][2]string{
+		{"device_platform", "android"},
+		{"os", "android"},
+		{"ssmix", "a"},
 		{"aid", AID},
 		{"app_name", AppName},
 		{"version_code", strconv.Itoa(VideoTabVersionCode)},
 		{"version_name", VideoTabVersionName},
 		{"channel", "vivo_8662_64"},
-		{"device_platform", "android"},
 		{"device_type", "PGT-AN10"},
+		{"device_brand", "HONOR"},
 		{"os_version", "12"},
+		{"os_api", "31"},
 		{"update_version_code", strconv.Itoa(VideoTabVersionCode)},
+		{"resolution", "1920*1080"},
+		{"dpi", "280"},
+		{"language", "zh"},
+		{"ac", "wifi"},
+		{"host_abi", "arm64-v8a"},
+		{"dragon_device_type", "phone"},
+		{"pv_player", strconv.Itoa(VideoTabVersionCode)},
+		{"compliance_status", "0"},
+		{"need_personal_recommend", "1"},
+		{"player_so_load", "1"},
+		{"is_android_pad_screen", "0"},
+		{"rom_version", "V417IR+release-keys"},
 		{"iid", id.InstallID},
 		{"cdid", id.CDID},
 		{"device_id", id.DeviceID},
-		{"video_id", episodeID},
-		{"video_id_type", "0"},
-		{"device_level", "1"},
-		{"need_all_video_definition", "1"},
-		{"need_mp4_align", "0"},
+	}
+	if id.KlinkEGDI != "" {
+		pairs = append(pairs, [2]string{"klink_egdi", id.KlinkEGDI})
+	}
+	return append(pairs,
+		[2]string{"video_id", episodeID},
+		[2]string{"video_id_type", "0"},
+		[2]string{"device_level", "1"},
+		[2]string{"need_all_video_definition", "1"},
+		[2]string{"need_mp4_align", "0"},
 		{"use_os_player", "0"},
 		{"video_platform", "1024"},
 		{"source", "0"},
 		{"from_video_id", ""},
-	}
+	)
 }
 
 // PlaybackV5Body 只压缩一次；调用方将返回的原始字节同时用于签名和发送。

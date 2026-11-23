@@ -18,6 +18,7 @@ import (
 type RegisterResult struct {
 	DeviceID  string
 	InstallID string
+	KlinkEGDI string
 	NewUser   int
 }
 
@@ -196,6 +197,8 @@ func ParseRegister(raw []byte) (RegisterResult, error) {
 	var env struct {
 		DeviceID  flexString `json:"device_id_str"`
 		InstallID flexString `json:"install_id_str"`
+		KlinkEGDI flexString `json:"klink_egdi"`
+		EGDI      flexString `json:"egdi"`
 		NewUser   int        `json:"new_user"`
 	}
 	if err := json.Unmarshal(raw, &env); err != nil {
@@ -206,7 +209,11 @@ func ParseRegister(raw []byte) (RegisterResult, error) {
 	if id == "" || id == "0" || install == "" || install == "0" {
 		return RegisterResult{}, errNoGuest
 	}
-	return RegisterResult{DeviceID: id, InstallID: install, NewUser: env.NewUser}, nil
+	egdi := env.KlinkEGDI.String()
+	if egdi == "" {
+		egdi = env.EGDI.String()
+	}
+	return RegisterResult{DeviceID: id, InstallID: install, KlinkEGDI: egdi, NewUser: env.NewUser}, nil
 }
 
 type noGuestError struct{}

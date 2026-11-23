@@ -34,6 +34,10 @@ func (c *Client) ResolvePlayback(ctx context.Context, episodeID string, _ Playba
 		if err != nil {
 			return nil, err
 		}
+		c.ensurePlaybackDeviceActivated(ctx, p)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		var raw []byte
 		for attempt := 0; attempt < 2; attempt++ {
 			if err = ctx.Err(); err != nil {

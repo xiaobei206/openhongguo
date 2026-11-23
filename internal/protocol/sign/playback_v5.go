@@ -57,9 +57,13 @@ func (s *PlaybackV5Signer) Sign(pairs [][2]string, nowMillis int64, body []byte,
 			ent = *entropy
 		}
 		headers := map[string]string{
-			"x-khronos": strconv.FormatUint(uint64(ts), 10),
-			"x-helios":  playbackV5Helios(ts, ent.HeliosRandom),
-			"x-medusa":  s.medusa(query, queryHash, bodyMD5, ts, ent),
+			"x-khronos":    strconv.FormatUint(uint64(ts), 10),
+			"x-gorgon":     xGorgon(query, body, len(body) > 0, ts, ent.GorgonRandom),
+			"x-argus":      base64.StdEncoding.EncodeToString(le32(ts)),
+			"x-ladon":      base64.StdEncoding.EncodeToString(be32(ts)),
+			"x-helios":     playbackV5Helios(ts, ent.HeliosRandom),
+			"x-medusa":     s.medusa(query, queryHash, bodyMD5, ts, nowMillis, ent),
+			"x-xs-from-web": "0",
 		}
 		if body != nil {
 			headers["Content-Type"] = "application/json; charset=utf-8"
@@ -97,30 +101,67 @@ func playbackV5Hash(query [32]byte, body [16]byte, ts uint32) []byte {
 	return append(result[:16:16], le32(sumMD5(result[:16])|0x20)...)
 }
 
-func (s *PlaybackV5Signer) medusa(query string, queryHash [32]byte, bodyMD5 [16]byte, ts uint32, entropy Entropy) string {
+// playbackV5SecDeviceToken is the 25-character token expected by the V5
+// tt_agw envelope. The nonce remains stable for the lifetime of this signer.
+func playbackV5SecDeviceToken(nonce string) string {
+	if len(nonce) == 25 && nonce[0] == 'A' {
+		return nonce
+	}
+	if len(nonce) >= 24 {
+		return "A" + nonce[:24]
+	}
+	return "A" + nonce + strings.Repeat("A", 24-len(nonce))
+}
+
+func (s *PlaybackV5Signer) medusa(query string, queryHash [32]byte, bodyMD5 [16]byte, ts uint32, nowMillis int64, entropy Entropy) string {
 	deviceID := queryValue(query, "device_id")
 	version := queryValue(query, "version_name")
+	deviceType := queryValue(query, "device_type")
+	brand := queryValue(query, "device_brand")
+	if brand == "" {
+		brand = "HONOR"
+	}
+	secToken := playbackV5SecDeviceToken(s.nonce)
+
+	// Complete device submessage used by the updated mobile V5 signer.
 	device := concat(
 		protoSInt(1, 1), protoSInt(2, 2), protoString(3, appID), protoString(4, deviceID),
-		protoString(5, s.nonce), protoString(6, "!noperm!"), protoString(12, "Asia/Shanghai,8"),
-		protoString(13, "zh_CN"), protoString(22, queryValue(query, "os_version")), protoSInt(25, s.started),
-		protoString(30, queryValue(query, "device_type")), protoString(31, "HONOR"),
-		protoString(32, queryValue(query, "device_type")), protoString(34, "HONOR"),
+		protoString(5, secToken), protoString(6, "!noperm!"),
+		protoSInt(7, -888888), protoSInt(8, -888888), protoSInt(9, 3), protoSInt(10, -888888),
+		protoString(11, "!notset!"), protoString(12, "Asia/Shanghai,8"), protoString(13, "zh_CN"),
+		protoSInt(14, 4),
+		protoFloat(16, 0), protoFloat(17, 0), protoFloat(18, 0),
+		protoFloat(19, 0), protoFloat(20, 0), protoFloat(21, 0),
+		protoString(22, queryValue(query, "os_version")), protoSInt(23, 41), protoSInt(24, 36),
+		protoSInt(25, s.started), protoSInt(26, s.started), protoSInt(27, s.started),
+		protoSInt(28, nowMillis), protoSInt(29, -1),
+		protoString(30, deviceType), protoString(31, brand), protoString(32, deviceType),
+		protoString(33, deviceType), protoString(34, brand), protoString(35, brand), protoString(36, brand),
+		protoSInt(38, 31),
 	)
-	env := concat(protoString(6, "v04.10.03.04-bugfix"), protoString(8, queryValue(query, "channel")), protoBytes(12, device), protoString(14, version))
+
+	envSub13 := concat(protoSInt(1, int64(ts)), protoSInt(2, -2), protoSInt(4, 200))
+	env := concat(
+		protoSInt(1, entropy.EnvLaunch), protoSInt(2, 247235599), protoSInt(3, 247235596),
+		protoSInt(5, 7), protoString(6, "v04.10.03.04-bugfix"), protoSInt(7, entropy.EnvPID),
+		protoString(8, queryValue(query, "channel")), protoBytes(12, device), protoBytes(13, envSub13),
+		protoString(14, version),
+	)
+	nested := concat(protoSInt(1, 305), protoSInt(2, 4), protoSInt(3, 694367), protoSInt(5, 1621072674))
+
 	digest := playbackV5Hash(queryHash, bodyMD5, ts)
-	flags := make([]byte, 8)
+	flags, _ := hex.DecodeString("4480000000000000")
+	f24 := `{"cmr":16777216,"cmr2":16777216,"un_h":11,"vpn":0,"kd":0,"dyn":"","do":1,"tk":true}`
 	message := concat(
 		protoBytes(1, playbackV5Magic), protoSInt(2, 5), protoSInt(3, int64(entropy.MessageRandom)),
 		protoString(4, appID), protoString(5, deviceID), protoString(6, playbackV5License),
 		protoString(7, version), protoString(8, "v04.10.03-ml-android"), protoSInt(9, 0x040a0300),
 		protoBytes(10, flags), protoSInt(12, int64(ts)), protoBytes(13, digest), protoBytes(14, queryHash[:6]),
-		protoBytes(15, concat(protoSInt(1, 1), protoSInt(2, 1), protoSInt(3, 1), protoSInt(5, 1))),
-		protoSInt(17, int64(ts)), protoString(20, "none"), protoSInt(21, 377), protoBytes(23, env),
-		protoString(24, "{\"cmr\":16777216,\"cmr2\":16777216,\"un_h\":11,\"vpn\":0,\"kd\":0,\"dyn\":\"\",\"do\":1,\"tk\":true}"),
+		protoBytes(15, nested), protoString(16, secToken), protoSInt(17, int64(ts)),
+		protoString(20, "none"), protoSInt(21, 312), protoBytes(23, env), protoString(24, f24),
 	)
 	hash, mask := keyHash(playbackV5SignKey, entropy.Random)
-	transformed := append(flags, xmxor(message, hash[:])...)
+	transformed := append(append([]byte(nil), flags...), xmxor(message, hash[:])...)
 	for i, j := 0, len(transformed)-1; i < j; i, j = i+1, j-1 {
 		transformed[i], transformed[j] = transformed[j], transformed[i]
 	}
@@ -139,7 +180,6 @@ func (s *PlaybackV5Signer) medusa(query string, queryHash [32]byte, bodyMD5 [16]
 	result := concat(prefix, []byte{byte(entropy.Random), byte(entropy.Random >> 8), 0, 1}, encrypted)
 	return base64.StdEncoding.EncodeToString(result)
 }
-
 func playbackV5Helios(ts, random uint32) string {
 	seed := md5Raw(append(le32(random), []byte(appID)...))
 	ascii := []byte(hex.EncodeToString(seed[:]))

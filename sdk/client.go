@@ -33,7 +33,9 @@ const (
 // Client 执行匿名片库读取。只要注入的 transport 和 profile store 可以并发使用，
 // Client 也可以并发使用。
 type Client struct {
-	guestMu        sync.Mutex
+	guestMu           sync.Mutex
+	activationMu      sync.Mutex
+	activatedDeviceID string
 	transport      Transport
 	profileStore   ProfileStore
 	signer         Signer
@@ -448,6 +450,9 @@ func (c *Client) loadOrRegister(ctx context.Context, needTicket bool) (*DevicePr
 	}
 	p.DeviceID = registered.DeviceID
 	p.InstallID = registered.InstallID
+	if registered.KlinkEGDI != "" {
+		p.KlinkEGDI = registered.KlinkEGDI
+	}
 	p.DeviceToken = ""
 	applyGuestCookies(p, cookies)
 	if needTicket && len(cookies) > 0 && p.TTReq == "" {
@@ -516,10 +521,60 @@ func randInt64() (int64, error) {
 func (c *Client) identity(p *DeviceProfile) protocol.SearchIdentity {
 	return protocol.SearchIdentity{
 		DeviceID: p.DeviceID, InstallID: p.InstallID, CDID: p.CDID, OpenUDID: p.OpenUDID,
+		KlinkEGDI: p.KlinkEGDI,
 		Device: c.deviceOf(p),
 	}
 }
 
+// ensurePlaybackDeviceActivated best-effort activates a persisted anonymous device
+// before playback. Existing profiles are handled too; no identity is cleared or rotated.
+func (c *Client) ensurePlaybackDeviceActivated(ctx context.Context, p *DeviceProfile) {
+	if c == nil || p == nil || !guestReady(p) || c.transport == nil {
+		return
+	}
+	c.activationMu.Lock()
+	defer c.activationMu.Unlock()
+	if c.activatedDeviceID == p.DeviceID {
+		return
+	}
+	started := time.Now()
+	actCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	q := url.Values{
+		"aid":             {protocol.AID},
+		"app_name":        {protocol.AppName},
+		"channel":         {c.deviceOf(p).Channel},
+		"device_id":       {p.DeviceID},
+		"iid":             {p.InstallID},
+		"device_platform": {protocol.DevicePlatform},
+		"os":              {"android"},
+		"version_code":    {protocol.VersionCode},
+		"version_name":    {protocol.VersionName},
+		"_rticket":        {strconv.FormatInt(c.clock().UnixMilli(), 10)},
+	}
+	request := &Request{
+		Method: "GET",
+		URL: "https://log5-applog-lf.fqnovel.com/service/2/app_alert_check/?" + q.Encode(),
+		Headers: map[string]string{
+			"User-Agent": protocol.UserAgent(c.deviceOf(p)),
+			"Accept":     "application/json",
+		},
+	}
+	resp, err := c.transport.Do(actCtx, request)
+	if err != nil || resp == nil {
+		if c.logger != nil {
+			c.logger.Printf("playback device activation failed: error_type=%T duration_ms=%d", err, time.Since(started).Milliseconds())
+		}
+		return
+	}
+	if c.logger != nil {
+		c.logger.Printf("playback device activation response: status=%d response_bytes=%d duration_ms=%d",
+			resp.StatusCode, len(resp.Body), time.Since(started).Milliseconds())
+	}
+	if resp.StatusCode == 200 {
+		c.activatedDeviceID = p.DeviceID
+	}
+}
 // deviceOf 返回 p 注册时使用的设备；档案未指定设备时，返回客户端的设备。
 func (c *Client) deviceOf(p *DeviceProfile) model.Device {
 	if p != nil && p.Device != nil {

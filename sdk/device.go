@@ -25,6 +25,8 @@ type DeviceProfile struct {
 	DeviceID    string `json:"device_id_str,omitempty"`
 	InstallID   string `json:"install_id_str,omitempty"`
 	DeviceToken string `json:"device_token,omitempty"`
+	// KlinkEGDI is a server-issued playback attestation value.
+	KlinkEGDI string `json:"klink_egdi,omitempty"`
 	// TTReq、StoreRegion 和 StoreRegionSrc 是服务端设置的 cookie，
 	// 后续请求会原样带上。
 	TTReq          string `json:"ttreq,omitempty"`
