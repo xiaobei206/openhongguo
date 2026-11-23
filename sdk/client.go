@@ -211,26 +211,20 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL string, headers map[
 	}
 	if resp == nil { return nil, nil, fmt.Errorf("%w: nil response", ErrTransport) }
 
-	var raw []byte
-	var readErr error
 	decodedBytes := -1
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		var decoded []byte
-		decoded, readErr = decodeBody(resp)
-		if readErr == nil {
+		if decoded, decodeErr := decodeBody(resp); decodeErr == nil {
 			decodedBytes = len(decoded)
-			raw, readErr = readAnonymousBody(resp, decoded)
 		}
-	} else {
-		readErr = readAnonymous(resp)
 	}
+	raw, err := readAnonymous(resp)
 	if c.logger != nil && playback {
 		c.logger.Printf("playback response method=%s url=%s status=%d transferred_bytes=%d decoded_bytes=%s content_type=%s content_encoding=%s duration_ms=%d stage=%s server_trace=%s",
 			method, protocol.RedactedURL(req.URL), resp.StatusCode, len(resp.Body), byteCount(decodedBytes),
 			headerValue(resp.Headers, "Content-Type"), headerValue(resp.Headers, "Content-Encoding"),
-			time.Since(started).Milliseconds(), playbackResultStage(readErr), safeServerTrace(resp.Headers))
+			time.Since(started).Milliseconds(), playbackResultStage(err), safeServerTrace(resp.Headers))
 	}
-	if readErr != nil { return nil, nil, readErr }
+	if err != nil { return nil, nil, err }
 	return raw, resp.Cookies, nil
 }
 
@@ -306,34 +300,37 @@ func statusOf(resp *Response) int {
 }
 
 func readAnonymous(resp *Response) ([]byte, error) {
-	if resp == nil { return nil, fmt.Errorf("%w: nil response", ErrTransport) }
+	if resp == nil {
+		return nil, fmt.Errorf("%w: nil response", ErrTransport)
+	}
 	switch resp.StatusCode {
-	case 401, 403: return nil, ErrAuthenticationRequired
-	case 429: return nil, ErrRateLimited
+	case 401, 403:
+		return nil, ErrAuthenticationRequired
+	case 429:
+		return nil, ErrRateLimited
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, &APIError{HTTPStatus: resp.StatusCode, Message: "HTTP request failed"}
 	}
 	body, err := decodeBody(resp)
-	if err != nil { return nil, err }
-	return readAnonymousBody(resp, body)
-}
-
-// readAnonymousBody classifies a response that has already been decompressed.
-func readAnonymousBody(resp *Response, body []byte) ([]byte, error) {
-	if resp == nil { return nil, fmt.Errorf("%w: nil response", ErrTransport) }
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, &APIError{HTTPStatus: resp.StatusCode, Message: "HTTP request failed"}
+	if err != nil {
+		return nil, err
 	}
-	if len(bytes.TrimSpace(body)) == 0 { return nil, ErrAnonymousLimited }
+	if len(bytes.TrimSpace(body)) == 0 {
+		return nil, ErrAnonymousLimited
+	}
 	if code, message, ok := protocol.BusinessCode(body); ok && code != "0" {
 		n, convErr := strconv.Atoi(code)
 		if convErr != nil {
-			if protocol.AuthCode(code, message) { return nil, ErrAuthenticationRequired }
+			if protocol.AuthCode(code, message) {
+				return nil, ErrAuthenticationRequired
+			}
 			return nil, &CodeError{Message: message, Kind: protocol.Classify(0, message)}
 		}
 		kind := protocol.Classify(n, message)
-		return nil, &CodeError{Code: n, Name: protocol.CodeName(n), Message: message, Kind: kind}
+		return nil, &CodeError{
+			Code: n, Name: protocol.CodeName(n), Message: message, Kind: kind,
+		}
 	}
 	if status := protocol.BaseStatus(body); protocol.DeviceRejected(status) {
 		return nil, &CodeError{Code: status, Name: "DEVICE_REJECTED", Kind: protocol.KindDeviceRejected}
