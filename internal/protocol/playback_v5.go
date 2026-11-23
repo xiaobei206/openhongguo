@@ -81,37 +81,38 @@ func PlaybackV5Pairs(id SearchIdentity) [][2]string {
 // player endpoint answers with an empty model. Device fields come from the
 // same persisted anonymous profile as the primary playback request.
 func VideoTabPairs(episodeID string, id SearchIdentity) [][2]string {
-	// Keep the dedicated 7.4.5.32 video_tab profile, but include the full
-	// query fields used by the updated mobile V5 client. Anonymous IDs and
-	// optional EGDI still come from the same persisted registration.
+	// Keep the dedicated 7.4.5.32 video_tab profile. Parameter ordering follows
+	// the newer mobile client; registered anonymous IDs remain from one profile.
+	version := strconv.Itoa(VideoTabVersionCode)
 	pairs := [][2]string{
 		{"device_platform", "android"},
 		{"os", "android"},
 		{"ssmix", "a"},
+		{"cdid", id.CDID},
+		{"channel", "vivo_8662_64"},
 		{"aid", AID},
 		{"app_name", AppName},
-		{"version_code", strconv.Itoa(VideoTabVersionCode)},
+		{"version_code", version},
 		{"version_name", VideoTabVersionName},
-		{"channel", "vivo_8662_64"},
-		{"device_type", "PGT-AN10"},
-		{"device_brand", "HONOR"},
-		{"os_version", "12"},
-		{"os_api", "31"},
-		{"update_version_code", strconv.Itoa(VideoTabVersionCode)},
+		{"manifest_version_code", version},
+		{"update_version_code", version},
 		{"resolution", "1920*1080"},
 		{"dpi", "280"},
+		{"device_type", "PGT-AN10"},
+		{"device_brand", "HONOR"},
 		{"language", "zh"},
+		{"os_api", "31"},
+		{"os_version", "12"},
 		{"ac", "wifi"},
 		{"host_abi", "arm64-v8a"},
 		{"dragon_device_type", "phone"},
-		{"pv_player", strconv.Itoa(VideoTabVersionCode)},
+		{"pv_player", version},
 		{"compliance_status", "0"},
 		{"need_personal_recommend", "1"},
 		{"player_so_load", "1"},
 		{"is_android_pad_screen", "0"},
 		{"rom_version", "V417IR+release-keys"},
 		{"iid", id.InstallID},
-		{"cdid", id.CDID},
 		{"device_id", id.DeviceID},
 	}
 	if id.KlinkEGDI != "" {
