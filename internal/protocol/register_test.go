@@ -70,6 +70,11 @@ func decryptRegisterTestEnvelope(t *testing.T, body []byte) []byte {
 	return payload
 }
 
+func oaIDValue(value map[string]any) string {
+	id, _ := value["id"].(string)
+	return id
+}
+
 func TestBuildHeartbeatBodyPreservesExistingDeviceIdentity(t *testing.T) {
 	profile := RegisterIdentity{
 		CDID: "cdid-existing",
@@ -92,13 +97,16 @@ func TestBuildHeartbeatBodyPreservesExistingDeviceIdentity(t *testing.T) {
 		"cdid": "cdid-existing",
 		"openudid": "openudid-existing",
 		"clientudid": "clientudid-existing",
-		"oaid": "oaid-existing",
 		"req_id": "req-existing",
 	}
 	for key, value := range want {
 		if got, _ := decoded.Header[key].(string); got != value {
 			t.Errorf("heartbeat header %s = %q, want %q", key, got, value)
 		}
+	}
+	oaid, ok := decoded.Header["oaid"].(map[string]any)
+	if !ok || oaIDValue(oaid) != "oaid-existing" {
+		t.Errorf("heartbeat OAID object = %#v, want id=%q", decoded.Header["oaid"], "oaid-existing")
 	}
 }
 

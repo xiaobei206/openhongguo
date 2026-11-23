@@ -36,11 +36,13 @@ type Options struct {
 	Logger Logger
 	// Clock 提供当前时间；为 nil 时使用 time.Now。
 	Clock func() time.Time
-	// APIOrigin 承载片库读取，格式为 "https://host"；
-	// 为空时使用 App 的 API 主机。RegisterOrigin 承载设备注册；
-	// 为空时使用 App 的注册主机。
+	// APIOrigin 承载片库读取，格式为 "https://host"；为空时使用 App 的 API 主机。
+	// RegisterOrigin 承载设备注册；为空时使用 App 的注册主机。
 	APIOrigin      string
 	RegisterOrigin string
+	// ActivationOrigin 承载 /service/2/app_alert_check/；生产环境与 RegisterOrigin 不同。
+	// 为空时使用红果设备激活服务主机，测试可覆盖为本地服务。
+	ActivationOrigin string
 	// DistributionOrigin 承载 /reading/distribution/ 和 activity_api
 	// 读取（短剧筛选和活动榜单），APIOrigin 的默认主机不提供这些接口。
 	// 为空时使用 App 自己的 API 主机。

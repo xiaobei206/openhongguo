@@ -24,8 +24,9 @@ import (
 )
 
 const (
-	defaultAPIOrigin      = "https://" + protocol.APIHost
-	defaultRegisterOrigin = "https://" + protocol.RegisterHost
+	defaultAPIOrigin        = "https://" + protocol.APIHost
+	defaultRegisterOrigin   = "https://" + protocol.RegisterHost
+	defaultActivationOrigin = "https://log5-applog-lf.fqnovel.com"
 	// defaultDistributionOrigin 承载 /reading/distribution/ 和 activity_api。
 	defaultDistributionOrigin = "https://" + protocol.DistributionHost
 )
@@ -36,16 +37,17 @@ type Client struct {
 	guestMu           sync.Mutex
 	activationMu      sync.Mutex
 	activatedDeviceID string
-	transport      Transport
-	profileStore   ProfileStore
-	signer         Signer
-	playbackSigner *sign.PlaybackV5Signer
-	authProvider   AuthProvider
-	logger         Logger
-	clock          func() time.Time
-	apiOrigin      string
-	registerOrigin string
-	distOrigin     string
+	transport         Transport
+	profileStore      ProfileStore
+	signer            Signer
+	playbackSigner    *sign.PlaybackV5Signer
+	authProvider      AuthProvider
+	logger            Logger
+	clock             func() time.Time
+	apiOrigin         string
+	registerOrigin    string
+	activationOrigin  string
+	distOrigin        string
 	// device 是新档案注册时使用的设备（Options.Device）。
 	device model.Device
 	// retryAttempts 是单个请求最多执行的次数（1 表示不重试）。
@@ -82,6 +84,10 @@ func NewClient(opts Options) (*Client, error) {
 	if reg == "" {
 		reg = defaultRegisterOrigin
 	}
+	activation := strings.TrimRight(opts.ActivationOrigin, "/")
+	if activation == "" {
+		activation = defaultActivationOrigin
+	}
 	dist := strings.TrimRight(opts.DistributionOrigin, "/")
 	if dist == "" {
 		dist = defaultDistributionOrigin
@@ -114,7 +120,7 @@ func NewClient(opts Options) (*Client, error) {
 		playbackSigner: sign.NewPlaybackV5Signer(opts.Clock().UnixMilli()),
 		authProvider:   opts.AuthProvider,
 		logger:         opts.Logger, clock: opts.Clock,
-		apiOrigin: api, registerOrigin: reg, distOrigin: dist,
+		apiOrigin: api, registerOrigin: reg, activationOrigin: activation, distOrigin: dist,
 	}, nil
 }
 
@@ -639,7 +645,7 @@ func (c *Client) ensurePlaybackDeviceActivated(ctx context.Context, p *DevicePro
 	}
 	request := &Request{
 		Method: "GET",
-		URL: "https://log5-applog-lf.fqnovel.com/service/2/app_alert_check/?" + q.Encode(),
+		URL: c.activationOrigin + "/service/2/app_alert_check/?" + q.Encode(),
 		Headers: map[string]string{
 			"User-Agent": protocol.UserAgent(c.deviceOf(p)),
 			"Accept":     "application/json",

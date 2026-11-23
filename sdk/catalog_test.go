@@ -58,6 +58,7 @@ func testClient(t *testing.T, handler http.Handler) (*sdk.Client, *logCapture) {
 		ProfileStore:       memstore.New(),
 		APIOrigin:          srv.URL,
 		RegisterOrigin:     srv.URL,
+		ActivationOrigin:   srv.URL,
 		DistributionOrigin: srv.URL,
 		Logger:             logs,
 		Clock:              func() time.Time { return time.UnixMilli(1_700_000_000_123).UTC() },
