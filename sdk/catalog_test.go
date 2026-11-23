@@ -81,6 +81,10 @@ func happyHandler(t *testing.T, seen *[]captured) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		*seen = append(*seen, captured{Method: r.Method, Path: r.URL.Path, RawQuery: r.URL.RawQuery, Header: r.Header.Clone(), Body: string(body)})
+		if r.URL.Path == "/service/2/app_alert_check/" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		name, ok := files[r.URL.Path]
 		if !ok {
 			http.NotFound(w, r)
@@ -448,6 +452,14 @@ func assertAnonymousWire(t *testing.T, seen []captured) {
 			if hit.Header.Get("x-gorgon") == "" || hit.Header.Get("x-ss-stub") == "" {
 				t.Fatal("series signature missing")
 			}
+		case "/service/2/app_alert_check/":
+			if hit.Method != http.MethodGet {
+				t.Fatalf("device activation method = %s", hit.Method)
+			}
+			q, _ := url.ParseQuery(hit.RawQuery)
+			if q.Get("device_id") != "7100000000000001" || q.Get("iid") != "7100000000000002" || q.Get("channel") != model.DefaultDevice.Channel {
+				t.Fatal("device activation query lost the registered Xiaomi profile")
+			}
 		case protocol.PathPlaybackV5:
 			played = true
 			q, _ := url.ParseQuery(hit.RawQuery)
@@ -476,10 +488,11 @@ func assertAnonymousWire(t *testing.T, seen []captured) {
 			if hit.Header.Get("Content-Encoding") != "gzip" || hit.Header.Get("x-medusa") == "" || hit.Header.Get("x-helios") == "" || hit.Header.Get("x-khronos") == "" || hit.Header.Get("x-ss-stub") == "" {
 				t.Fatal("playback V5 signature missing")
 			}
-			for _, h := range []string{"x-argus", "x-ladon", "x-gorgon"} {
-				if hit.Header.Get(h) != "" {
-					t.Fatalf("playback V5 carries legacy %s", h)
-				}
+			// The updated V5 SDK carries short timestamp tags in argus/ladon,
+			// plus a complete Gorgon digest; these are not the legacy signer format.
+			if len(hit.Header.Get("x-argus")) != 8 || len(hit.Header.Get("x-ladon")) != 8 || len(hit.Header.Get("x-gorgon")) != 52 {
+				t.Fatalf("V5 security tag format mismatch: argus=%q ladon=%q gorgon=%q",
+					hit.Header.Get("x-argus"), hit.Header.Get("x-ladon"), hit.Header.Get("x-gorgon"))
 			}
 		case protocol.PathPlayback:
 			t.Fatal("playback fell back to the legacy route")
