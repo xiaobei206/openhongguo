@@ -177,12 +177,12 @@ func fmtUsers(page *CatalogPage) string {
 }
 
 func TestParseSearchAcceptsSingleVideoObject(t *testing.T) {
-	raw := []byte(`{"code":0,"search_tabs":[{"tab_type":11,"data":[{"show_type":532,"video_data":[{"series_id":"7100000000000199","title":"短剧"}]},{"show_type":369,"video_data":{"series_id":"7100000000000101","title":"noise","video_detail":{"series_title":"Fixture Lantern Court","series_cover":"https://media.invalid/search-cover.jpg","episode_cnt":2}}}]}]}`)
+	raw := []byte(`{"code":0,"search_tabs":[{"tab_type":11,"data":[{"show_type":532,"video_data":[{"series_id":"7100000000000199","title":"短剧"}]},{"show_type":369,"video_data":{"series_id":"7100000000000101","title":"noise","video_detail":{"series_title":"Fixture Lantern Court","series_cover":"https://media.invalid/search-cover.jpg?x-expires=2000000000","episode_cnt":2}}}]}]}`)
 	page, err := ParseSearch(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Items) != 1 || page.Items[0].ID != "7100000000000101" || page.Items[0].Title != "Fixture Lantern Court" {
+	if len(page.Items) != 1 || page.Items[0].ID != "7100000000000101" || page.Items[0].Title != "Fixture Lantern Court" || page.Items[0].CoverURL != "https://media.invalid/search-cover.jpg?x-expires=2000000000" || page.Items[0].CoverExpiresAt.IsZero() {
 		t.Fatalf("page = %+v", page.Items)
 	}
 }

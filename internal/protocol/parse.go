@@ -470,7 +470,7 @@ func ParseSearchTab(raw []byte, tabType int) (*CatalogPage, error) {
 					}
 					page.Items = append(page.Items, model.SeriesSummary{
 						ID: cid, Title: ctitle, Description: card.Intro,
-						CoverURL: card.Cover, EpisodeCount: card.EpisodeCount,
+						CoverURL: card.Cover, CoverExpiresAt: URLLifetime(card.Cover), EpisodeCount: card.EpisodeCount,
 					})
 				}
 			}
