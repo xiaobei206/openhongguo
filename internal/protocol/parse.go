@@ -306,7 +306,7 @@ func appendCatalogCell(page *CatalogPage, cell catalogCell) {
 			}
 			page.Items = append(page.Items, model.SeriesSummary{
 				ID: id, Title: card.Title, Description: card.Intro,
-				CoverURL: card.Cover, EpisodeCount: card.EpisodeCount,
+				CoverURL: card.Cover, CoverExpiresAt: URLLifetime(card.Cover), EpisodeCount: card.EpisodeCount,
 			})
 		}
 	}
@@ -454,7 +454,7 @@ func ParseSearchTab(raw []byte, tabType int) (*CatalogPage, error) {
 				id := v.SeriesID.String()
 				if id != "" && title != "" {
 					page.Items = append(page.Items, model.SeriesSummary{
-						ID: id, Title: title, Description: v.VideoDetail.Intro,\n\t\t\t\t\t\tCoverURL: v.VideoDetail.Cover, EpisodeCount: v.VideoDetail.EpisodeCount,
+						ID: id, Title: title, Description: v.VideoDetail.Intro,\n\t\t\t\t\t\tCoverURL: v.VideoDetail.Cover, CoverExpiresAt: URLLifetime(v.VideoDetail.Cover), EpisodeCount: v.VideoDetail.EpisodeCount,
 					})
 					continue
 				}
