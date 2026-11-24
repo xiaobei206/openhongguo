@@ -43,7 +43,7 @@ func TestParseDiscoverKeepsDetailListTitle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Items) != 1 || page.Items[0].ID != "7100000000000101" || page.Items[0].Title != "Fixture Lantern Court" || page.Items[0].CoverURL != "https://media.invalid/search-cover.jpg" {
+	if len(page.Items) != 1 || page.Items[0].ID != "7100000000000101" || page.Items[0].Title != "Fixture Lantern Court" {
 		t.Fatalf("page = %+v", page.Items)
 	}
 	next, ok := DiscoverContinuation(raw)
@@ -182,7 +182,7 @@ func TestParseSearchAcceptsSingleVideoObject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Items) != 1 || page.Items[0].ID != "7100000000000101" || page.Items[0].Title != "Fixture Lantern Court" {
+	if len(page.Items) != 1 || page.Items[0].ID != "7100000000000101" || page.Items[0].Title != "Fixture Lantern Court" || page.Items[0].CoverURL != "https://media.invalid/search-cover.jpg" {
 		t.Fatalf("page = %+v", page.Items)
 	}
 }
