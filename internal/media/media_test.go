@@ -118,6 +118,9 @@ func TestSaveDownloadsAndRefusesOverwrite(t *testing.T) {
 }
 
 func TestDecryptInvokesFFmpegWithKey(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("player fixtures use POSIX shell scripts; these subprocess tests run on Linux CI")
+	}
 	dir := t.TempDir()
 	argsFile := filepath.Join(dir, "ffmpeg-args.txt")
 	script := filepath.Join(dir, "ffmpeg")
