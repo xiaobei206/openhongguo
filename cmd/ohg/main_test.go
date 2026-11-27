@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -25,7 +26,7 @@ func TestMigrateConfigCopiesProfileAndHistoryOnce(t *testing.T) {
 		if err != nil || string(got) != want {
 			t.Fatalf("%s = %q err %v", name, got, err)
 		}
-		if info, _ := os.Stat(filepath.Join(newDir, name)); info.Mode().Perm() != 0600 {
+		if info, _ := os.Stat(filepath.Join(newDir, name)); runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 			t.Fatalf("%s mode %o", name, info.Mode().Perm())
 		}
 	}
