@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,9 @@ import (
 // directory. Each script can write files next to itself for the test to read.
 func streamLauncher(t *testing.T, player, ffmpegBody, playerBody string) (*Launcher, string) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("player fixtures use POSIX shell scripts; these subprocess tests run on Linux CI")
+	}
 	dir := t.TempDir()
 	scripts := map[string]string{"ffmpeg": ffmpegBody, player: playerBody}
 	for name, body := range scripts {
