@@ -8,12 +8,16 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
 func stubPlayer(t *testing.T, name, output string) *Launcher {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("player fixtures use POSIX shell scripts; these subprocess tests run on Linux CI")
+	}
 	dir := t.TempDir()
 	script := filepath.Join(dir, name)
 	body := "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + shellQuote(output) + "\n"
