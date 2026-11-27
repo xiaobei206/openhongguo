@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 )
 
 // ErrNeedsFile means the resolved player cannot play a protected stream
