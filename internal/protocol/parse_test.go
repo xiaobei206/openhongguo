@@ -38,7 +38,7 @@ func TestParseDiscoverSurfacesIDsAndTitles(t *testing.T) {
 }
 
 func TestParseDiscoverKeepsDetailListTitle(t *testing.T) {
-	raw := []byte(`{"code":0,"data":{"tab_item":[{"tab_type":16,"session_id":"feed-session","client_template":7,"cell_data":[{"cell_id_str":"7100000000000301","show_type":407,"cell_data":[{"video_detail":{"video_list":[{"series_id":"7100000000000101","title":"promo line"}],"video_detail_list":[{"series_id_str":"7100000000000101","series_title":"Fixture Lantern Court"}]}}]}]}]}}`)
+	raw := []byte(`{"code":0,"data":{"tab_item":[{"tab_type":16,"session_id":"feed-session","client_template":7,"cell_data":[{"cell_id_str":"7100000000000301","show_type":407,"cell_data":[{"video_detail":{"video_list":[{"series_id":"7100000000000101","title":"promo line"}],"video_detail_list":[{"series_id_str":"7100000000000101","series_title":"Fixture Lantern Court","series_cover":"https://media.invalid/search-cover.jpg"}]}}]}]}]}}`)
 	page, err := ParseDiscover(raw)
 	if err != nil {
 		t.Fatal(err)
