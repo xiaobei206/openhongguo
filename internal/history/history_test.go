@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -23,7 +24,7 @@ func TestRecordGetListAndClear(t *testing.T) {
 		}
 	}
 	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
 		t.Fatalf("mode = %v err = %v", info.Mode().Perm(), err)
 	}
 	got, ok, err := NewStore(path).Get(ctx, "1")
