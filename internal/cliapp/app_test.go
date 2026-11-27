@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -113,7 +114,7 @@ func TestCLIAnonymousReadsUseShippedClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0600 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 		t.Fatalf("profile mode = %o", info.Mode().Perm())
 	}
 	saved, err := os.ReadFile(filepath.Join(dir, "anonymous.json"))
