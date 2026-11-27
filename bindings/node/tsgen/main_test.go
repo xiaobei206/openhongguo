@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -19,7 +20,7 @@ func TestTypesUpToDate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if string(got) != want {
+		if strings.ReplaceAll(string(got), "\r\n", "\n") != strings.ReplaceAll(want, "\r\n", "\n") {
 			t.Errorf("%s is stale: run go run ./bindings/node/tsgen > %s", path, path)
 		}
 	}
