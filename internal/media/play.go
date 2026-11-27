@@ -256,10 +256,22 @@ func (l *Launcher) playPipe(ctx context.Context, name, playerPath, stdinArg, key
 	select {
 	case ffRunErr = <-ffDone:
 	default:
-		// The player quit while ffmpeg was still producing the stream.
-		cancelSrc()
-		<-ffDone
-		return ErrStopped
+		// The player may reach EOF after ffmpeg has exited but before the
+		// goroutine waiting on ff.Wait publishes its result to ffDone.
+		// Give that completed process a brief chance to report its exit
+		// status; otherwise an ordinary end-of-stream is misclassified as
+		// the user stopping playback (a race especially visible with short
+		// streams and fast local players).
+		timer := time.NewTimer(100 * time.Millisecond)
+		defer timer.Stop()
+		select {
+		case ffRunErr = <-ffDone:
+		case <-timer.C:
+			// The player quit while ffmpeg was still producing the stream.
+			cancelSrc()
+			<-ffDone
+			return ErrStopped
+		}
 	}
 	if ffRunErr != nil {
 		msg := strings.TrimSpace(ffErr.String())
